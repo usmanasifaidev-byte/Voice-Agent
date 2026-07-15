@@ -398,13 +398,16 @@ class TurnManager:
                 logger.info("push_chunk: sid=%s segment=%d - transcription result: '%s' (len=%d)", sid, s.segment_index, txt, len(txt))
             s.transcript = txt
             s.finalized = True
-            res: Dict = {"ok": True, "finalized": True, "transcript": txt, "state": "speaking"}
+            # "thinking" once a reply will actually be generated; otherwise back to "listening" right away
+            # (this used to always say "speaking", which showed while the LLM/TTS hadn't even started)
+            will_respond = bool(respond and txt)
+            res: Dict = {"ok": True, "finalized": True, "transcript": txt, "state": "thinking" if will_respond else "listening"}
             logger.info("push_chunk: sid=%s segment=%d - returning finalized result: transcript='%s'", sid, s.segment_index, txt)
-            
+
             # Note: scripted_chat API call is now handled asynchronously in webrtc.py
             # This prevents blocking the event loop. We just set processing_active and return.
             # The actual API call and audio generation happens in _handle_scripted_chat_response()
-            if respond and txt:
+            if will_respond:
                 # Keep processing_active=True - it will be cleared after audio playback completes
                 # or in _handle_scripted_chat_response if no audio is generated
                 logger.info("push_chunk: sid=%s - transcript finalized, response will be handled asynchronously (processing_active=True)", sid)

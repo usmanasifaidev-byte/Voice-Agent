@@ -3,16 +3,13 @@ uvicorn[standard]
 pydantic
 python-dotenv
 together
-langchain
-chromadb
-sentence-transformers
 websockets
 httpx
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch
 torchaudio
 soundfile
 numpy
 pydub
 faster-whisper
-
-
+piper-tts

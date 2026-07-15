@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: agentic-system
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    numInstances: 1
+    healthCheckPath: /api/ping
+    envVars:
+      - key: TOGETHER_API_KEY
+        sync: false
+      - key: TOGETHER_MODEL
+        value: meta-llama/Llama-3.3-70B-Instruct-Turbo
+      - key: WHISPER_MODEL
+        value: base
+      - key: USE_CUDA
+        value: "false"

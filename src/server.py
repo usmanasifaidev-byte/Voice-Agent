@@ -4,45 +4,21 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import os
 from app.api.state import router as state_router
-from app.api.rag import router as rag_router
-from app.api.setup import router as setup_router
 from app.api.voice import router as voice_router
 from app.api.webrtc import router as webrtc_router
 
 app = FastAPI()
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(name)s: %(message)s')
 
-# Log CUDA status after logging is configured
-@app.on_event("startup")
-async def startup_event():
-    from voice.service.shared_session import USE_CUDA
-    logger = logging.getLogger(__name__)
-    if USE_CUDA:
-        logger.info("=" * 60)
-        logger.info("GPU ACCELERATION: ENABLED (CUDA)")
-        logger.info("=" * 60)
-    else:
-        logger.info("=" * 60)
-        logger.info("GPU ACCELERATION: DISABLED (Using CPU)")
-        logger.info("=" * 60)
-
 app.include_router(state_router, prefix="/api")
-app.include_router(rag_router)
-app.include_router(setup_router)
 app.include_router(voice_router, prefix="/api")
 app.include_router(webrtc_router, prefix="/api")
 app.mount("/static", StaticFiles(directory="public"), name="static")
 
 @app.get("/")
 def index():
-    return FileResponse(os.path.join("public", "setup.html"))
+    return FileResponse(os.path.join("public", "chat.html"))
 
 @app.get("/chat.html")
 def chat_page():
     return FileResponse(os.path.join("public", "chat.html"))
-
-@app.get("/setup.html")
-def setup_page():
-    return FileResponse(os.path.join("public", "setup.html"))
-
- 

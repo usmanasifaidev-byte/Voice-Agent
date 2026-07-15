@@ -40,3 +40,7 @@ test.wav
 *.swp
 *.swo
 *~
+
+# Local run/diagnostic logs (may contain sensitive info)
+*.log
+output.txt

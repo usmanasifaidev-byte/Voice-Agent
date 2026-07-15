@@ -1,0 +1,38 @@
+.git
+.gitignore
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+env/
+.env
+.env.local
+.env.*.local
+
+# Secrets must never be baked into the image — set these via Render's env var dashboard instead
+.env*
+!.env.example
+
+node_modules/
+dist/
+
+# Runtime/data dirs — recreated at container start, irrelevant to the build
+data/
+storage/
+
+# Local voice model already on disk for dev — the Docker build fetches its own copy
+models/
+
+*.wav
+*.webm
+*.mp3
+*.mp4
+
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Unrelated to this service's deployment
+developer_api/

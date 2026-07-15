@@ -1,0 +1,3 @@
+# Ensure shell scripts always have LF endings, regardless of the committer's
+# platform/autocrlf setting — a CRLF start.sh breaks inside the Linux container.
+*.sh text eol=lf

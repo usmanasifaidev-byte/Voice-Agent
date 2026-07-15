@@ -56,54 +56,73 @@ async def _handle_scripted_chat_response(websocket: WebSocket, session_id: str, 
         response.raise_for_status()
         data = response.json()
         reply = data.get("reply", "")
-        
+        end_call = bool(data.get("end_call", False))
+
         # Add assistant reply to conversation history
         if reply:
             s.conversation_history.append({"role": "assistant", "content": reply})
             s.turn_number += 1
-        
-        logger.info("_handle_scripted_chat_response: reply received (len=%d) for session_id=%s", len(reply), session_id)
-        
-        # Send reply text (don't include transcript - it was already sent in the initial processing_result)
+
+        logger.info("_handle_scripted_chat_response: reply received (len=%d, end_call=%s) for session_id=%s", len(reply), end_call, session_id)
+
+        # Send reply text (don't include transcript - it was already sent in the initial processing_result).
+        # State stays "thinking" here — audio hasn't been generated yet, so it isn't "speaking" until
+        # _send_audio_ready actually fires.
         if not await safe_send_text(websocket, {
             "type": "processing_result",
             "ok": True,
             "finalized": True,
             "reply": reply,
-            "state": "speaking"
+            "state": "thinking",
+            "end_call": end_call
         }):
             return  # Connection closed
-        
+
         # Generate audio if TTS is available
         if reply and TURN.piper_voice:
             from voice.tts.piper_runner import synthesize_wav_api
             # Clean markdown formatting from reply before TTS (remove asterisks, bold markers, etc.)
             cleaned_reply = clean_text_for_tts(reply)
-            logger.debug("_handle_scripted_chat_response: cleaned reply for TTS (original_len=%d, cleaned_len=%d)", 
+            logger.debug("_handle_scripted_chat_response: cleaned reply for TTS (original_len=%d, cleaned_len=%d)",
                         len(reply), len(cleaned_reply))
-            
+
             # Get current segment index (before advance_segment was called)
             segment_index = s.segment_index - 1 if s.segment_index > 0 else 0
             out_wav = os.path.join(s.dir, f"reply_segment_{segment_index}.wav")
             # Run TTS in executor (it's CPU/GPU intensive)
             loop = asyncio.get_event_loop()
             ok = await loop.run_in_executor(
-                None, 
-                synthesize_wav_api, 
-                TURN.piper_voice, 
+                None,
+                synthesize_wav_api,
+                TURN.piper_voice,
                 cleaned_reply,  # Use cleaned text for TTS
-                out_wav, 
+                out_wav,
                 TURN.use_cuda
             )
             if ok and os.path.exists(out_wav):
-                await _send_audio_ready(websocket, session_id, out_wav)
+                await _send_audio_ready(websocket, session_id, out_wav, end_call=end_call)
             else:
-                # No audio generated - clear processing flag
+                # No audio generated - clear processing flag and tell the client what to do next
+                # (previously left the frontend stuck showing "thinking" forever)
                 TURN.clear_processing_flag(session_id)
+                await safe_send_text(websocket, {
+                    "type": "processing_result",
+                    "ok": True,
+                    "finalized": False,
+                    "state": "listening",
+                    "end_call": end_call
+                })
         else:
-            # No audio to play - clear processing flag
+            # No audio to play - clear processing flag and tell the client what to do next
             TURN.clear_processing_flag(session_id)
-            
+            await safe_send_text(websocket, {
+                "type": "processing_result",
+                "ok": True,
+                "finalized": False,
+                "state": "listening",
+                "end_call": end_call
+            })
+
     except Exception as e:
         logger.error("_handle_scripted_chat_response error: %s", str(e), exc_info=True)
         # Clear processing flag on error
@@ -114,7 +133,7 @@ async def _handle_scripted_chat_response(websocket: WebSocket, session_id: str, 
         }):
             pass  # Connection closed
 
-async def _send_audio_ready(websocket: WebSocket, session_id: str, audio_path: str):
+async def _send_audio_ready(websocket: WebSocket, session_id: str, audio_path: str, end_call: bool = False):
     """Send audio_ready message to client"""
     s = SESS.get(session_id)
     if not s:
@@ -124,13 +143,14 @@ async def _send_audio_ready(websocket: WebSocket, session_id: str, audio_path: s
     if s:
         s.reply_audio_path = audio_path
         logger.info("_send_audio_ready: set reply_audio_path=%s for session_id=%s", audio_path, session_id)
-    
+
     import time
     audio_url = f"/api/voice/audio/{session_id}?t={int(time.time() * 1000)}"
     await safe_send_text(websocket, {
         "type": "audio_ready",
         "audio_path": audio_url,
-        "audio_file": audio_path
+        "audio_file": audio_path,
+        "end_call": end_call
     })
 
 async def safe_send_text(websocket: WebSocket, message: dict) -> bool:
@@ -214,7 +234,7 @@ async def webrtc_websocket(websocket: WebSocket, session_id: str):
                     loop = asyncio.get_event_loop()
                     res = await loop.run_in_executor(
                         None, 
-                        lambda: TURN.push_chunk(session_id, chunk_data, vad_threshold=0.3, min_speech_ms=100, min_silence_ms=500, respond=False)
+                        lambda: TURN.push_chunk(session_id, chunk_data, vad_threshold=0.5, min_speech_ms=300, min_silence_ms=1200, respond=False)
                     )
                     
                     # Send response back
