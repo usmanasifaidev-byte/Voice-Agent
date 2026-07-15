@@ -285,6 +285,13 @@ async def webrtc_websocket(websocket: WebSocket, session_id: str):
         logger.error("WebRTC WebSocket error: %s", str(e), exc_info=True)
     finally:
         active_connections.pop(session_id, None)
+        # Sessions were never otherwise removed from TURN/SESS (in-memory dicts) — an unbounded
+        # leak over the process lifetime. Any in-flight background task (push_chunk's executor
+        # thread, _handle_scripted_chat_response) already holds its own reference to the session
+        # object and checks TURN.get()/safe_send_text for None/closed before continuing, so
+        # dropping it from the dict here is safe even if work is still finishing up.
+        TURN.remove(session_id)
+        SESS.remove(session_id)
         logger.info("WebRTC connection closed: session_id=%s", session_id)
 
 @router.post("/voice/webrtc/start")

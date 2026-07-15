@@ -124,7 +124,9 @@ class TurnSession:
                     cmd,
                     input=webm_data,  # Send webm bytes (with header if needed) via stdin
                     capture_output=True,
-                    timeout=5
+                    # 15s, not 5s: on constrained/shared CPU hosting (e.g. Render starter), ffmpeg can
+                    # get starved by concurrent whisper/VAD work from an overlapping call and blow past 5s
+                    timeout=15
                 )
                 
                 if res.returncode != 0:
@@ -265,7 +267,13 @@ class TurnManager:
 
     def get(self, sid: str) -> Optional[TurnSession]:
         return self.sessions.get(sid)
-    
+
+    def remove(self, sid: str) -> None:
+        """Drop a session once its call ends — sessions are never otherwise cleaned up,
+        so leaving this out is an unbounded in-memory leak over the life of the process."""
+        self.sessions.pop(sid, None)
+
+
     def clear_processing_flag(self, sid: str) -> bool:
         """Clear the processing_active flag for a session (called after playback completes)"""
         s = self.get(sid)

@@ -27,6 +27,9 @@ class VoiceSessionManager:
     def get(self, sid: str) -> Optional[VoiceSession]:
         return self.sessions.get(sid)
 
+    def remove(self, sid: str) -> None:
+        self.sessions.pop(sid, None)
+
     def set_input(self, sid: str, path: str):
         s = self.get(sid)
         if s:
