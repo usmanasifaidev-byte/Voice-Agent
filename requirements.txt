@@ -8,9 +8,7 @@ websockets
 httpx
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch
-torchaudio
 soundfile
 numpy
-pydub
 faster-whisper
 piper-tts
